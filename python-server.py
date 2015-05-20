@@ -2,6 +2,8 @@
 
 import time
 import threading
+import subprocess
+import shlex
 import json
 import sys
 import socket
@@ -13,6 +15,7 @@ import parametres
 
 # Variables globales
 threads = []
+p_servoblaster = None
 g_distance = 0
 g_distance_securite = 30
 g_vitesse = 50
@@ -157,10 +160,23 @@ class thread_commande_PO(threading.Thread):
 
 # Gestion de l'arret du programme principal et des threads
 def kill():
+    # Fermeture du socket TCP
     serveur_sock.close()
+    # Arret du programme servoblaster
+    p_servoblaster.send_signal(signal.SIGTERM)
+    # Arret de l'ensemble des threads
     for t in threads:
         t.kill_received = True
+    # Arret du programme principal
     sys.exit(0)
+
+# Demarrage du programme de gestion du servo-moteur et du variateur de vitesse
+def launch_servoblaster():
+    global p_servoblaster
+    cmd = "servod --min=" + str(MIN_US_SB) + "us --max=" + str(MAX_US_SB)
+    cmd += "us --p1pins=" + str(GPIO_DIRECTION) + "," + str(GPIO_VITESSE)
+    args = shlex.split(cmd)
+    p_servoblaster = subprocess.Popen(args)
 
 # Enregistrement de la modification du parametre de distance de securite
 def sv_cfg_security_distance():
@@ -205,7 +221,8 @@ def main():
     try:
         signal.signal(signal.SIGTERM, signal_kill)
 
-        print("Configuration serveur tcp")
+        # Demarrage du programme servoblaster
+        launch_servoblaster()
 
         # Mise en ecoute du serveur TCP
         serveur_sock.bind((BIND_IP, CLIENT_TCP_PORT))

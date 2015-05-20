@@ -10,9 +10,13 @@ DELAY_MESURE = 0.05
 # Delais entre 2 commandes de la PO
 DELAY_CMD_PO = 0.01
 
-# Identifiants servoblaster
-DEV_DIRECTION = 'P1-12'     # Servo-moteur de direction
-DEV_VITESSE = 'P1-11'       # Variateur de vitesse
+# Parametres servoblaster
+DEV_DIRECTION = 'P1-12'     # Identifiant servo-moteur de direction
+DEV_VITESSE = 'P1-11'       # Identifiant variateur de vitesse
+GPIO_DIRECTION = 12         # Numero identifiant servo-moteur rirection (GPIO18)
+GPIO_VITESSE = 11           # Numero identifiant variateur de vitesse (GPIO17)
+MIN_US_SB = 1000            # Largeur d'impultion MINimale en us
+MAX_US_SB = 2000            # Largeur d'impultion MAXimale en us
 
 # Adresse IP d'ecoute du serveur TCP
 BIND_IP = 192.168.1.95
