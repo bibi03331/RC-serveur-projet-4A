@@ -212,6 +212,20 @@ def sv_cfg_max_speed():
     json.dump(data, cfg_file)
     cfg_file.close()
 
+# Chargement de la configuration du systeme
+def load_config():
+    global g_vitesse_max
+    global g_distance_max
+
+    # Lecture du fichier de configuration
+    cfg_file = open("cfg.json", "r")
+    data = json.load(cfg_file)
+    cfg_file.close()
+
+    # Mise a jour des parametres
+    g_vitesse_max = data["configuration"]["vitesse_max"]
+    g_distance_max = data["configuration"]["distance_max"]
+
 # Gestion du signal kill pour terminer le programme et les threads
 def signal_kill(signal, frame):
     print "Arret du programme"
@@ -220,6 +234,9 @@ def signal_kill(signal, frame):
 def main():
     try:
         signal.signal(signal.SIGTERM, signal_kill)
+
+        # Chargement de la configuration
+        load_config()
 
         # Demarrage du programme servoblaster
         launch_servoblaster()
@@ -239,8 +256,9 @@ def main():
         threads.append(thread_2)
 
         while(1):
-            # Thread pour la gestion d'un client TCP
+            # Attente du client TCP
             (client_tcp, addr) = serveur_sock.accept()
+            # Thread pour la gestion d'un client TCP
             thread_3 = thread_client_tcp(3, client_tcp)
             thread_3.start()
             threads.append(thread_3)
