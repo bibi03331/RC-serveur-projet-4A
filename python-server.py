@@ -153,7 +153,7 @@ class thread_commande_PO(threading.Thread):
         self.dev.write(self.direction_to_write + "\n")
         self.dev.close()
 
-        time.sleep(0.01)
+        time.sleep(DELAY_CMD_PO)
 
 # Gestion de l'arret du programme principal et des threads
 def kill():

@@ -7,6 +7,9 @@ GPIO_ECHO = 24
 # Delais entre 2 mesure d'un capteur ultrason
 DELAY_MESURE = 0.05
 
+# Delais entre 2 commandes de la PO
+DELAY_CMD_PO = 0.01
+
 # Identifiants servoblaster
 DEV_DIRECTION = 'P1-12'     # Servo-moteur de direction
 DEV_VITESSE = 'P1-11'       # Variateur de vitesse
