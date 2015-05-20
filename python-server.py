@@ -121,6 +121,50 @@ class thread_client_tcp(threading.Thread):
         print("Arret serveur tcp")
         self.client_tcp.close()
 
+# Gestion d'un module Xbee
+class thread_client_Xbee(threading.Thread):
+
+    def __init__(self, threadID):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.kill_received = False
+        self.cfg_xbee()
+
+    def run(self):
+        while not self.kill_received:
+            self.reception_client_xbee()
+        self.clean_client_xbee()
+
+    def cfg_xbee(self):
+        self.serial = serial.Serial(XBEE_DIR, XBEE_BAUD, timeout=XBEE_TIMEOUT)
+        self.xbee = XBee(self.serial)
+        # print("Configuration du Xbee effectuee")
+
+    def reception_client_xbee(self):
+        global g_vitesse
+        global g_direction
+
+        self.data = self.xbee.wait_read_frame()
+        # print(self.xbee.wait_read_frame())
+
+        try:
+            self.decoded = json.loads(self.data['rf_data'])
+
+            if ('commande' in self.decoded): # Commande PO
+                try:
+                    g_vitesse = self.decoded['commande']['vitesse']
+                    g_direction = self.decoded['commande']['direction']
+                    # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                except KeyError:
+                    print("Erreur decodage JSON commande")
+
+        except ValueError:
+            print("Erreur parse JSON")
+
+    def clean_client_xbee(self):
+        print("Arret serveur tcp")
+        self.xbee.close()
+
 # Gestion de la partie operative
 class thread_commande_PO(threading.Thread):
 
@@ -255,12 +299,18 @@ def main():
         thread_2.start()
         threads.append(thread_2)
 
+        # Thread de gestion du Xbee
+        thread_3 = thread_client_Xbee(3)
+        thread_3.start()
+        threads.append(thread_3)
+
         while(1):
             # Attente du client TCP
             (client_tcp, addr) = serveur_sock.accept()
+
             # Thread pour la gestion d'un client TCP
-            thread_3 = thread_client_tcp(3, client_tcp)
-            thread_3.start()
+            thread_4 = thread_client_tcp(4, client_tcp)
+            thread_4.start()
             threads.append(thread_3)
 
     except KeyboardInterrupt:

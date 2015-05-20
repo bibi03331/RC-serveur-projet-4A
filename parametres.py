@@ -24,3 +24,8 @@ BIND_IP = 192.168.1.95
 CLIENT_TCP_PORT = 10200
 # Taille du buffer de reception TCP
 CLIENT_TCP_BUFFER_SIZE = 1024
+
+# Configuration module Xbee
+XBEE_DIR = '/dev/tty.usbserial-DA01A8AG' # Chemin module Xbee
+XBEE_BAUD = 115200
+XBEE_TIMEOUT = 1
