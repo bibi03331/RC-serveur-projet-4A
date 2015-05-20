@@ -38,18 +38,18 @@ class thread_ultrason(threading.Thread):
         self.clean_ultrason()
 
     def configure_ultrason(self):
-        print("Configuration ultrason")
-        # BCM GPIO references
+        # print("Configuration ultrason")
+        # Configuration en mode BCM pour les references GPIO
         GPIO.setmode(GPIO.BCM)
-        # Pin configuration
-        GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # Trigger
-        GPIO.setup(GPIO_ECHO,GPIO.IN)      # Echo
+        # Configuration des PIN du raspberry
+        GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # PIN Trigger
+        GPIO.setup(GPIO_ECHO,GPIO.IN)      # PIN Echo
         GPIO.output(GPIO_TRIGGER, False)
         time.sleep(0.5)
 
     def mesure_ultrason(self):
         global g_distance
-        # Send 10us pulse to trigger
+        # Envoi d'un niveau haut de 10ms pour le trigger
         GPIO.output(GPIO_TRIGGER, True)
         time.sleep(0.00001)
         GPIO.output(GPIO_TRIGGER, False)
@@ -65,7 +65,7 @@ class thread_ultrason(threading.Thread):
         time.sleep(DELAY_MESURE)
 
     def clean_ultrason(self):
-        print("Arret mesures ultrason")
+        # print("Arret mesures ultrason")
         GPIO.cleanup()
 
 # Gestion d'un client TCP
@@ -76,7 +76,7 @@ class thread_client_tcp(threading.Thread):
         self.threadID = threadID
         self.kill_received = False
         self.client_tcp = client_tcp
-        print("Connexion client")
+        # print("Connexion client")
 
     def run(self):
         while not self.kill_received:
@@ -94,14 +94,15 @@ class thread_client_tcp(threading.Thread):
         try:
             self.decoded = json.loads(self.data)
 
-            if ('commande' in self.decoded):
+            if ('commande' in self.decoded): # Commande PO
                 try:
                     g_vitesse = self.decoded['commande']['vitesse']
                     g_direction = self.decoded['commande']['direction']
                     # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
                 except KeyError:
                     print("Erreur decodage JSON commande")
-            elif ('configuration' in self.decoded):
+
+            elif ('configuration' in self.decoded): # Configuration parametres
                 try:
                     g_distance_securite = self.decoded['configuration']['distance_arret']
                     g_vitesse_max = self.decoded['configuration']['vitesse_max']
@@ -109,6 +110,7 @@ class thread_client_tcp(threading.Thread):
                     sv_cfg_max_speed()
                 except KeyError:
                     print("Erreur decodage JSON configuration")
+
         except ValueError:
             print("Erreur parse JSON")
 
@@ -230,6 +232,7 @@ def main():
         print "Ctrl-c : Arret du programme"
         kill()
 
+    # Gestion des erreurs
     except Exception as e:
         print(e.message, e.args)
         kill()
