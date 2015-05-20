@@ -22,9 +22,11 @@ CLIENT_TCP_PORT = 10200
 CLIENT_TCP_BUFFER_SIZE = 1024
 
 threads = []
-g_distance = 0;
-g_vitesse = 50;
-g_direction = 50;
+g_distance = 0
+g_distance_securite = 30
+g_vitesse = 50
+g_vitesse_max = 60
+g_direction = 50
 
 serveur_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serveur_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -91,14 +93,31 @@ class thread_client_tcp(threading.Thread):
     def reception_client_tcp(self):
         global g_vitesse
         global g_direction
+        global g_distance_securite
+        global g_vitesse_max
 
         self.data = self.client_tcp.recv(CLIENT_TCP_BUFFER_SIZE)
 
-        self.decoded = json.loads(self.data)
-        g_vitesse = self.decoded['vitesse']
-        g_direction = self.decoded['direction']
+        try:
+            self.decoded = json.loads(self.data)
 
-        # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+            if ('commande' in self.decoded):
+                try:
+                    g_vitesse = self.decoded['commande']['vitesse']
+                    g_direction = self.decoded['commande']['direction']
+                    # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                except KeyError:
+                    print("Erreur decodage JSON commande")
+            elif ('configuration' in self.decoded):
+                try:
+                    g_distance_securite = self.decoded['configuration']['distance_arret']
+                    g_vitesse_max = self.decoded['configuration']['vitesse_max']
+                    sv_cfg_security_distance()
+                    sv_cfg_max_speed()
+                except KeyError:
+                    print("Erreur decodage JSON configuration")
+        except ValueError:
+            print("Erreur parse JSON")
 
     def clean_client_tcp(self):
         print("Arret serveur tcp")
@@ -117,14 +136,18 @@ class thread_commande_PO(threading.Thread):
 
     def gestion_PO(self):
 
-        if(g_distance > 30):
-            self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
+        if (g_distance > g_distance_securite):
+            if (g_vitesse <= g_vitesse_max):
+                self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
+            else:
+                self.vitesse_to_write = g_vitesse_max
         else:
             self.vitesse_to_write = DEV_VITESSE + '=50%'
 
         self.direction_to_write = DEV_DIRECTION + '=' + str(g_direction) + '%'
 
         # print("Direction : " + self.direction_to_write)
+        # print("Vitesse : " + self.vitesse_to_write)
 
         self.dev = open("/dev/servoblaster", "w")
         self.dev.write(self.vitesse_to_write + "\n")
@@ -142,6 +165,38 @@ def kill():
     for t in threads:
         t.kill_received = True
     sys.exit(0)
+
+def sv_cfg_security_distance():
+    global g_distance_max
+
+    # Lecture du fichier de configuration
+    cfg_file = open("cfg.json", "r")
+    data = json.load(cfg_file)
+    cfg_file.close()
+
+    # Mise a jour du parametre de distance de securite
+    data["configuration"]["distance_max"] = g_distance_max
+
+    # Sauvegarde de la modification
+    cfg_file = open("cfg.json", "w")
+    json.dump(data, cfg_file)
+    cfg_file.close()
+
+def sv_cfg_max_speed():
+    global g_vitesse_max
+
+    # Lecture du fichier de configuration
+    cfg_file = open("cfg.json", "r")
+    data = json.load(cfg_file)
+    cfg_file.close()
+
+    # Mise a jour du parametre de distance de securite
+    data["configuration"]["vitesse_max"] = g_vitesse_max
+
+    # Sauvegarde de la modification
+    cfg_file = open("cfg.json", "w")
+    json.dump(data, cfg_file)
+    cfg_file.close()
 
 def signal_kill(signal, frame):
     print "Arret du programme"
