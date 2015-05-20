@@ -19,7 +19,7 @@ MIN_US_SB = 1000            # Largeur d'impultion MINimale en us
 MAX_US_SB = 2000            # Largeur d'impultion MAXimale en us
 
 # Adresse IP d'ecoute du serveur TCP
-BIND_IP = 192.168.1.95
+BIND_IP = '192.168.1.1'
 # Port d'ecoute du serveur TCP
 CLIENT_TCP_PORT = 10200
 # Taille du buffer de reception TCP

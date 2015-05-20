@@ -8,10 +8,11 @@ import json
 import sys
 import socket
 import signal
+import serial
 import RPi.GPIO as GPIO
 
-# Importation des paramètres du programme
-import parametres
+# Importation des parametres du programme
+from parametres import *
 
 # Variables globales
 threads = []
@@ -93,77 +94,38 @@ class thread_client_tcp(threading.Thread):
         global g_vitesse_max
 
         self.data = self.client_tcp.recv(CLIENT_TCP_BUFFER_SIZE)
+        self.data_lines = self.data.split('\n')
 
-        try:
-            self.decoded = json.loads(self.data)
+        for self.line in self.data_lines:
 
-            if ('commande' in self.decoded): # Commande PO
+            if(self.line != ''):
+
                 try:
-                    g_vitesse = self.decoded['commande']['vitesse']
-                    g_direction = self.decoded['commande']['direction']
-                    # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
-                except KeyError:
-                    print("Erreur decodage JSON commande")
+                    self.decoded = json.loads(self.line)
 
-            elif ('configuration' in self.decoded): # Configuration parametres
-                try:
-                    g_distance_securite = self.decoded['configuration']['distance_arret']
-                    g_vitesse_max = self.decoded['configuration']['vitesse_max']
-                    sv_cfg_security_distance()
-                    sv_cfg_max_speed()
-                except KeyError:
-                    print("Erreur decodage JSON configuration")
+                    if ('commande' in self.decoded): # Commande PO
+                        try:
+                            g_vitesse = self.decoded['commande']['vitesse']
+                            g_direction = self.decoded['commande']['direction']
+                            # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                        except KeyError:
+                            print("Erreur decodage JSON commande")
 
-        except ValueError:
-            print("Erreur parse JSON")
+                    elif ('configuration' in self.decoded): # Configuration parametres
+                        try:
+                            g_distance_securite = self.decoded['configuration']['distance_arret']
+                            g_vitesse_max = self.decoded['configuration']['vitesse_max']
+                            sv_cfg_security_distance()
+                            sv_cfg_max_speed()
+                        except KeyError:
+                            print("Erreur decodage JSON configuration")
+
+                except ValueError:
+                    print("Erreur parse JSON : " + self.data)
 
     def clean_client_tcp(self):
         print("Arret serveur tcp")
         self.client_tcp.close()
-
-# Gestion d'un module Xbee
-class thread_client_Xbee(threading.Thread):
-
-    def __init__(self, threadID):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.kill_received = False
-        self.cfg_xbee()
-
-    def run(self):
-        while not self.kill_received:
-            self.reception_client_xbee()
-        self.clean_client_xbee()
-
-    def cfg_xbee(self):
-        self.serial = serial.Serial(XBEE_DIR, XBEE_BAUD, timeout=XBEE_TIMEOUT)
-        self.xbee = XBee(self.serial)
-        # print("Configuration du Xbee effectuee")
-
-    def reception_client_xbee(self):
-        global g_vitesse
-        global g_direction
-
-        self.data = self.xbee.wait_read_frame()
-        # print(self.xbee.wait_read_frame())
-
-        try:
-            self.decoded = json.loads(self.data['rf_data'])
-
-            if ('commande' in self.decoded): # Commande PO
-                try:
-                    g_vitesse = self.decoded['commande']['vitesse']
-                    g_direction = self.decoded['commande']['direction']
-                    # print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
-                except KeyError:
-                    print("Erreur decodage JSON commande")
-
-        except ValueError:
-            print("Erreur parse JSON")
-
-    def clean_client_xbee(self):
-        print("Arret serveur tcp")
-        self.xbee.close()
 
 # Gestion de la partie operative
 class thread_commande_PO(threading.Thread):
@@ -290,9 +252,9 @@ def main():
         serveur_sock.listen(1)
 
         # Thread capteur ultrason avant
-        thread_1 = thread_ultrason(1)
-        thread_1.start()
-        threads.append(thread_1)
+        # thread_1 = thread_ultrason(1)
+        # thread_1.start()
+        # threads.append(thread_1)
 
         # Thread de gestion de la partie operative
         thread_2 = thread_commande_PO(2)
@@ -300,18 +262,18 @@ def main():
         threads.append(thread_2)
 
         # Thread de gestion du Xbee
-        thread_3 = thread_client_Xbee(3)
-        thread_3.start()
-        threads.append(thread_3)
+        #thread_3 = thread_client_Xbee(3)
+        #thread_3.start()
+        #threads.append(thread_3)
 
         while(1):
             # Attente du client TCP
             (client_tcp, addr) = serveur_sock.accept()
 
             # Thread pour la gestion d'un client TCP
-            thread_4 = thread_client_tcp(4, client_tcp)
+            thread_4 = thread_client_tcp(3, client_tcp)
             thread_4.start()
-            threads.append(thread_3)
+            threads.append(thread_4)
 
     except KeyboardInterrupt:
         print "Ctrl-c : Arret du programme"
