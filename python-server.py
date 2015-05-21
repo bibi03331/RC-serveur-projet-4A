@@ -255,10 +255,10 @@ def print_infos(level, msg):
 
 # Chargement de la configuration du systeme
 def load_config():
-    global g_vitesse_max
-    global g_distance_max
+
 
     try:
+        print_infos(1, "Chargement des parametres")
         # Lecture du fichier de configuration
         cfg_file = open("cfg.json", "r")
         data = json.load(cfg_file)
@@ -267,6 +267,8 @@ def load_config():
         # Mise a jour des parametres
         g_vitesse_max = data["configuration"]["vitesse_max"]
         g_distance_max = data["configuration"]["distance_max"]
+
+        print_infos(2, "Parametres du systeme :\n-Vitesse max : " + str(g_vitesse_max) + "\n-Distance max : " + str(g_distance_max))
 
     except:
         print_infos(3, "Erreur lors de l'ouverture du fichier de configuration")
