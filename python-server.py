@@ -17,13 +17,13 @@ from parametres import *
 
 # Variables globales
 threads = []
-p_servoblaster = None
 serveur_sock = None
 g_distance = 0
-g_distance_securite = 30
 g_vitesse = 50
-g_vitesse_max = 60
 g_direction = 50
+g_vitesse_max = 60
+g_distance_securite = 30
+
 
 # Gestion d'un capteur ultrason HC-SR04
 class thread_ultrason(threading.Thread):
@@ -99,7 +99,7 @@ class thread_client_tcp(threading.Thread):
 
             for self.line in self.data_lines:
 
-                if(self.line != ''):
+                if (self.line != ''):
 
                     try:
                         self.decoded = json.loads(self.line)
@@ -116,8 +116,8 @@ class thread_client_tcp(threading.Thread):
                             try:
                                 g_distance_securite = self.decoded['configuration']['distance_arret']
                                 g_vitesse_max = self.decoded['configuration']['vitesse_max']
-                                sv_cfg_security_distance()
-                                sv_cfg_max_speed()
+                                sv_cfg_security_distance(g_distance_securite)
+                                sv_cfg_max_speed(g_vitesse_max)
                                 print_infos(2, "Mise a jour configuration : \nDistance d'arret : " + str(g_distance_securite) + " \nVitesse max : " + str(g_vitesse_max) )
                             except KeyError:
                                 print_infos(3, "Erreur decodage JSON configuration")
@@ -207,8 +207,7 @@ def stop_servoblaster():
     os.system(cmd)
 
 # Enregistrement de la modification du parametre de distance de securite
-def sv_cfg_security_distance():
-    global g_distance_max
+def sv_cfg_security_distance(val_to_save):
 
     try:
         # Lecture du fichier de configuration
@@ -217,7 +216,7 @@ def sv_cfg_security_distance():
         cfg_file.close()
 
         # Mise a jour du parametre de distance de securite
-        data["configuration"]["distance_max"] = g_distance_max
+        data["configuration"]["distance_max"] = val_to_save
 
         # Sauvegarde de la modification
         cfg_file = open("cfg.json", "w")
@@ -227,8 +226,7 @@ def sv_cfg_security_distance():
         print_infos(3, "Erreur lors de l'ouverture du fichier de configuration")
 
 # Enregistrement de la modification du parametre de vitesse max
-def sv_cfg_max_speed():
-    global g_vitesse_max
+def sv_cfg_max_speed(val_to_save):
 
     try:
         # Lecture du fichier de configuration
@@ -237,7 +235,7 @@ def sv_cfg_max_speed():
         cfg_file.close()
 
         # Mise a jour du parametre de distance de securite
-        data["configuration"]["vitesse_max"] = g_vitesse_max
+        data["configuration"]["vitesse_max"] = val_to_save
 
         # Sauvegarde de la modification
         cfg_file = open("cfg.json", "w")
