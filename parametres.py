@@ -1,11 +1,18 @@
 #!/usr/bin/python
 
 # GPIO capteur ultrason avant
-GPIO_TRIGGER = 23
-GPIO_ECHO = 24
+GPIO_TRIGGER_CPT_AV = 23
+GPIO_ECHO_CPT_AV = 24
+
+# GPIO capteur ultrason arriere
+GPIO_TRIGGER_CPT_AR = 22
+GPIO_ECHO_CPT_AR = 27
 
 # Delais entre 2 mesure d'un capteur ultrason
 DELAY_MESURE = 0.05
+
+# Delais entre 2 envois des informations au client
+DELAY_ENVOI_INFOS = 0.1
 
 # Delais entre 2 commandes de la PO
 DELAY_CMD_PO = 0.01
@@ -25,7 +32,7 @@ CLIENT_TCP_PORT = 10200
 # Taille du buffer de reception TCP
 CLIENT_TCP_BUFFER_SIZE = 1024
 # Valeur en secondes du timeout du client TCP
-TIMEOUT_CLIENT_TCP = 5
+TIMEOUT_CLIENT_TCP = 60
 
 # Configuration module Xbee
 XBEE_DIR = '/dev/tty.usbserial-DA01A8AG' # Chemin module Xbee

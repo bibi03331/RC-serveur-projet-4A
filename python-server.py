@@ -18,61 +18,82 @@ from parametres import *
 # Variables globales
 threads = []
 serveur_sock = None
-g_distance = 0
+g_distance_avant = 0
+g_distance_arriere = 0
 g_vitesse = 50
 g_direction = 50
 g_vitesse_max = 60
 g_distance_securite = 30
 
 
-# Gestion d'un capteur ultrason HC-SR04
-class thread_ultrason(threading.Thread):
+# Gestion capteur ultrason HC-SR04 avant
+class thread_ultrason_av(threading.Thread):
 
     def __init__(self, threadID):
         threading.Thread.__init__(self)
         self.threadID = threadID
         self.kill_received = False
-        self.configure_ultrason()
+        configure_ultrason(GPIO_TRIGGER_CPT_AV, GPIO_ECHO_CPT_AV)
 
     def run(self):
-        print_infos(1, "Demarrage des mesures capteur ultrason")
+        print_infos(1, "Demarrage des mesures capteur ultrason avant")
         while not self.kill_received:
             self.mesure_ultrason()
-        self.clean_ultrason()
-
-    def configure_ultrason(self):
-        print_infos(2, "Configuration ultrason")
-        # Configuration en mode BCM pour les references GPIO
-        GPIO.setmode(GPIO.BCM)
-        # Configuration des PIN du raspberry
-        GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # PIN Trigger
-        GPIO.setup(GPIO_ECHO,GPIO.IN)      # PIN Echo
-        GPIO.output(GPIO_TRIGGER, False)
-        time.sleep(0.5)
+        clean_ultrason()
 
     def mesure_ultrason(self):
         global g_distance
         # Envoi d'un niveau haut de 10ms pour le trigger
-        GPIO.output(GPIO_TRIGGER, True)
+        GPIO.output(GPIO_TRIGGER_CPT_AV, True)
         time.sleep(0.00001)
-        GPIO.output(GPIO_TRIGGER, False)
+        GPIO.output(GPIO_TRIGGER_CPT_AV, False)
         start = time.time()
-        while GPIO.input(GPIO_ECHO)==0:
+        while GPIO.input(GPIO_ECHO_CPT_AV)==0:
             start = time.time()
 
-        while GPIO.input(GPIO_ECHO)==1:
+        while GPIO.input(GPIO_ECHO_CPT_AV)==1:
             stop = time.time()
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
-        g_distance = int(round(distance))
+        g_distance_avant = int(round(distance))
         time.sleep(DELAY_MESURE)
 
-    def clean_ultrason(self):
-        print_infos(1, "Arret mesures capteur ultrason")
-        GPIO.cleanup()
 
-# Gestion d'un client TCP
-class thread_client_tcp(threading.Thread):
+# Gestion capteur ultrason HC-SR04 arriere
+class thread_ultrason_ar(threading.Thread):
+
+    def __init__(self, threadID):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.kill_received = False
+        configure_ultrason(GPIO_TRIGGER_CPT_AR, GPIO_ECHO_CPT_AR)
+
+    def run(self):
+        print_infos(1, "Demarrage des mesures capteur ultrason arriere")
+        while not self.kill_received:
+            self.mesure_ultrason()
+        clean_ultrason()
+
+    def mesure_ultrason(self):
+        global g_distance
+        # Envoi d'un niveau haut de 10ms pour le trigger
+        GPIO.output(GPIO_TRIGGER_CPT_AR, True)
+        time.sleep(0.00001)
+        GPIO.output(GPIO_TRIGGER_CPT_AR, False)
+        start = time.time()
+        while GPIO.input(GPIO_ECHO_CPT_AR)==0:
+            start = time.time()
+
+        while GPIO.input(GPIO_ECHO_CPT_AR)==1:
+            stop = time.time()
+        elapsed = stop - start
+        distance = (elapsed * 34000) / 2
+        g_distance_arriere = int(round(distance))
+        time.sleep(DELAY_MESURE)
+
+
+# Gestion de reception des commandes du client TCP
+class thread_client_tcp_recept(threading.Thread):
 
     def __init__(self, threadID, client_tcp):
         threading.Thread.__init__(self)
@@ -83,9 +104,12 @@ class thread_client_tcp(threading.Thread):
 
     def run(self):
         while not self.kill_received:
-            self.envoi_infos_client_tcp()
             self.reception_client_tcp()
         self.clean_client_tcp()
+
+    def clean_client_tcp(self):
+        self.client_tcp.close()
+        print_infos(2, "Fermeture socket")
 
     def reception_client_tcp(self):
         global g_vitesse
@@ -95,6 +119,7 @@ class thread_client_tcp(threading.Thread):
 
         try:
             self.data = self.client_tcp.recv(1024)
+
             self.data_lines = self.data.split('\n')
 
             for self.line in self.data_lines:
@@ -108,7 +133,8 @@ class thread_client_tcp(threading.Thread):
                             try:
                                 g_vitesse = self.decoded['commande']['vitesse']
                                 g_direction = self.decoded['commande']['direction']
-                                print_infos(2, "Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                                print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                                break
                             except KeyError:
                                 print_infos(3, "Erreur decodage JSON commande")
 
@@ -129,17 +155,33 @@ class thread_client_tcp(threading.Thread):
             print_infos(3, "Timeout reception client tcp")
             self.kill_received = 1
 
-    def envoi_infos_client_tcp(self):
-        try:
-            self.infos = "{'informations':{'distance':" + str(g_distance) + "}}"
-            self.client_tcp.sendall(self.infos)
         except:
-            print_infos(3, "Client tcp en erreur")
+            print_infos(3, "Perte de connexion client tcp")
             self.kill_received = 1
 
-    def clean_client_tcp(self):
-        print_infos(2, "Deconnexion du client tcp")
-        self.client_tcp.close()
+# Gestion de l'envoi des informations au client TCP
+class thread_client_tcp_info(threading.Thread):
+
+    def __init__(self, threadID, client_tcp):
+        threading.Thread.__init__(self)
+        self.threadID = threadID
+        self.kill_received = False
+        self.client_tcp = client_tcp
+        print_infos(1, "Connexion client")
+
+    def run(self):
+        while not self.kill_received:
+            self.envoi_infos_client_tcp()
+            time.sleep(DELAY_ENVOI_INFOS)
+
+    def envoi_infos_client_tcp(self):
+        try:
+            self.infos = "{'informations':{'distance_avant':" + str(g_distance) + "}}"
+            self.client_tcp.sendall(self.infos)
+        except:
+            print_infos(3, "Erreur envoi infos client tcp")
+            self.kill_received = 1
+
 
 # Gestion de la partie operative
 class thread_commande_PO(threading.Thread):
@@ -157,28 +199,66 @@ class thread_commande_PO(threading.Thread):
 
     def gestion_PO(self):
 
-        if (g_distance > g_distance_securite):
-            if (g_vitesse <= g_vitesse_max):
-                self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
-            else:
-                self.vitesse_to_write = g_vitesse_max
-        else:
+        # Gestion de la vitesse
+        if ( (g_distance_avant <= g_distance_securite) and (g_vitesse > 50) ) or ( (g_distance_arriere <= g_distance_securite) and (g_vitesse < 50) ):
+
+            # Immobilisation du robot
             self.vitesse_to_write = DEV_VITESSE + '=50%'
 
+        else:
+
+            if (g_vitesse >= 50): # Commande marche avant
+
+                g_vitesse_pourcent = (g_vitesse - 50) * 2
+
+                if ( g_vitesse_pourcent <= g_vitesse_max ):
+                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
+                else:
+                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse_max - 50) + '%'
+
+            else: # Commande marche arriere
+
+                g_vitesse_pourcent = (50 - g_vitesse) * 2
+
+                if ( g_vitesse_pourcent <= g_vitesse_max ):
+                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
+                else:
+                    self.vitesse_to_write = DEV_VITESSE + '=' + str(50 - g_vitesse_max) + '%'
+
+
+        # Gestion de la direction
         self.direction_to_write = DEV_DIRECTION + '=' + str(g_direction) + '%'
 
         # print_infos(2, "Direction : " + self.direction_to_write)
         # print_infos(2, "Vitesse : " + self.vitesse_to_write)
 
+        # Commande de la vitesse
         self.dev = open("/dev/servoblaster", "w")
         self.dev.write(self.vitesse_to_write + "\n")
         self.dev.close()
 
+        # Commande de la direction
         self.dev = open("/dev/servoblaster", "w")
         self.dev.write(self.direction_to_write + "\n")
         self.dev.close()
 
         time.sleep(DELAY_CMD_PO)
+
+# Configuration d'un capteur ultrason HC-SR04
+def configure_ultrason(GPIO_TRIGGER, GPIO_ECHO):
+    print_infos(2, "Configuration ultrason")
+    # Configuration en mode BCM pour les references GPIO
+    GPIO.setmode(GPIO.BCM)
+    # Configuration des PIN du raspberry
+    GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # PIN Trigger
+    GPIO.setup(GPIO_ECHO,GPIO.IN)      # PIN Echo
+    GPIO.output(GPIO_TRIGGER, False)
+    time.sleep(0.5)
+
+# Suppression configuration GPIO des capteurs
+def clean_ultrason():
+    print_infos(1, "Arret mesures capteur ultrason")
+    GPIO.cleanup()
 
 # Gestion de l'arret du programme principal et des threads
 def kill():
@@ -246,6 +326,7 @@ def sv_cfg_max_speed(val_to_save):
 
 # Affichage debug
 def print_infos(level, msg):
+
     if (level == 1):
         print("**** " + msg + " ****")
     elif (level == 2):
@@ -255,7 +336,6 @@ def print_infos(level, msg):
 
 # Chargement de la configuration du systeme
 def load_config():
-
 
     try:
         print_infos(1, "Chargement des parametres")
@@ -297,24 +377,34 @@ def main():
         serveur_sock.listen(1)
 
         # Thread capteur ultrason avant
-        #thread_1 = thread_ultrason(1)
+        #thread_1 = thread_ultrason_av(1)
         #thread_1.start()
         #threads.append(thread_1)
 
+        # Thread capteur ultrason arriere
+        #thread_2 = thread_ultrason_ar(2)
+        #thread_2.start()
+        #threads.append(thread_2)
+
         # Thread de gestion de la partie operative
-        thread_2 = thread_commande_PO(2)
-        thread_2.start()
-        threads.append(thread_2)
+        thread_3 = thread_commande_PO(3)
+        thread_3.start()
+        threads.append(thread_3)
 
         while(1):
             # Attente du client TCP
             (client_tcp, addr) = serveur_sock.accept()
-            client_tcp.settimeout(TIMEOUT_CLIENT_TCP)
+            # client_tcp.settimeout(TIMEOUT_CLIENT_TCP)
 
-            # Thread pour la gestion d'un client TCP
-            thread_3 = thread_client_tcp(3, client_tcp)
-            thread_3.start()
-            threads.append(thread_3)
+            # Thread pour la gestion de reception des commandes du client TCP
+            thread_4 = thread_client_tcp_recept(4, client_tcp)
+            thread_4.start()
+            threads.append(thread_4)
+
+            # Thread pour la gestion de l'envoi des informations au client TCP
+            thread_5 = thread_client_tcp_info(5, client_tcp)
+            thread_5.start()
+            threads.append(thread_5)
 
     except KeyboardInterrupt:
         kill()
