@@ -1,12 +1,12 @@
 #!/usr/bin/python
 
 # GPIO capteur ultrason avant
-GPIO_TRIGGER_CPT_AV = 23
-GPIO_ECHO_CPT_AV = 24
+GPIO_TRIGGER_CPT_AV = 11 # (GPIO11 - PIN)
+GPIO_ECHO_CPT_AV = 8 # (GPIO8 - PIN)
 
 # GPIO capteur ultrason arriere
-GPIO_TRIGGER_CPT_AR = 22
-GPIO_ECHO_CPT_AR = 27
+GPIO_TRIGGER_CPT_AR = 22 # (GPIO22 - PIN15)
+GPIO_ECHO_CPT_AR = 27 # (GPIO27 - PIN13)
 
 # Delais entre 2 mesure d'un capteur ultrason
 DELAY_MESURE = 0.05

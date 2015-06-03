@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import time
+import datetime
 import threading
 import subprocess
 import shlex
@@ -18,12 +19,13 @@ from parametres import *
 # Variables globales
 threads = []
 serveur_sock = None
-g_distance_avant = 0
-g_distance_arriere = 0
+g_distance_avant = 50
+g_distance_arriere = 50
 g_vitesse = 50
 g_direction = 50
-g_vitesse_max = 60
+g_vitesse_max = 10
 g_distance_securite = 30
+flag_update_PO = 0
 
 
 # Gestion capteur ultrason HC-SR04 avant
@@ -38,25 +40,27 @@ class thread_ultrason_av(threading.Thread):
     def run(self):
         print_infos(1, "Demarrage des mesures capteur ultrason avant")
         while not self.kill_received:
-            self.mesure_ultrason()
+            if (g_vitesse > 50):
+                self.mesure_ultrason()
+            time.sleep(DELAY_MESURE)
+
         clean_ultrason()
 
     def mesure_ultrason(self):
-        global g_distance
+        global g_distance_avant
         # Envoi d'un niveau haut de 10ms pour le trigger
         GPIO.output(GPIO_TRIGGER_CPT_AV, True)
         time.sleep(0.00001)
         GPIO.output(GPIO_TRIGGER_CPT_AV, False)
         start = time.time()
-        while GPIO.input(GPIO_ECHO_CPT_AV)==0:
+        while GPIO.input(GPIO_ECHO_CPT_AV) == 0:
             start = time.time()
 
-        while GPIO.input(GPIO_ECHO_CPT_AV)==1:
+        while GPIO.input(GPIO_ECHO_CPT_AV) == 1:
             stop = time.time()
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
         g_distance_avant = int(round(distance))
-        time.sleep(DELAY_MESURE)
 
 
 # Gestion capteur ultrason HC-SR04 arriere
@@ -71,11 +75,14 @@ class thread_ultrason_ar(threading.Thread):
     def run(self):
         print_infos(1, "Demarrage des mesures capteur ultrason arriere")
         while not self.kill_received:
-            self.mesure_ultrason()
+            if (g_vitesse < 50):
+                self.mesure_ultrason()
+            time.sleep(DELAY_MESURE)
+
         clean_ultrason()
 
     def mesure_ultrason(self):
-        global g_distance
+        global g_distance_arriere
         # Envoi d'un niveau haut de 10ms pour le trigger
         GPIO.output(GPIO_TRIGGER_CPT_AR, True)
         time.sleep(0.00001)
@@ -89,7 +96,6 @@ class thread_ultrason_ar(threading.Thread):
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
         g_distance_arriere = int(round(distance))
-        time.sleep(DELAY_MESURE)
 
 
 # Gestion de reception des commandes du client TCP
@@ -116,6 +122,7 @@ class thread_client_tcp_recept(threading.Thread):
         global g_direction
         global g_distance_securite
         global g_vitesse_max
+        global flag_update_PO
 
         try:
             self.data = self.client_tcp.recv(1024)
@@ -133,7 +140,8 @@ class thread_client_tcp_recept(threading.Thread):
                             try:
                                 g_vitesse = self.decoded['commande']['vitesse']
                                 g_direction = self.decoded['commande']['direction']
-                                print("Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
+                                flag_update_PO = 1
+                                # print(datetime.datetime.strftime(datetime.datetime.now(), '%H:%M:%S:%f') + " - Vitesse : " + str(g_vitesse) + " - Direction : " + str(g_direction) )
                                 break
                             except KeyError:
                                 print_infos(3, "Erreur decodage JSON commande")
@@ -193,44 +201,44 @@ class thread_commande_PO(threading.Thread):
         print_infos(1, "Demarrage gestion commande PO")
 
     def run(self):
+        global flag_update_PO
+
         while not self.kill_received:
+            #if (flag_update_PO == 1):
             self.gestion_PO()
+            flag_update_PO = 0
         print_infos(1, "Arret commande PO")
 
     def gestion_PO(self):
 
         # Gestion de la vitesse
-        if ( (g_distance_avant <= g_distance_securite) and (g_vitesse > 50) ) or ( (g_distance_arriere <= g_distance_securite) and (g_vitesse < 50) ):
-
-            # Immobilisation du robot
+        if (g_vitesse > 50 and g_distance_avant <= g_distance_securite) or (g_vitesse < 50 and g_distance_arriere <= g_distance_securite):
+            # Detection obstacle avant ou arriere : arret
+            if (g_distance_avant <= g_distance_securite):
+                print_infos(2, "Obstacle detecte : Capteur avant = " + str(g_distance_avant))
+            elif (g_distance_arriere <= g_distance_securite):
+                print_infos(2, "Obstacle detecte : Capteur arriere = " + str(g_distance_arriere))
             self.vitesse_to_write = DEV_VITESSE + '=50%'
-
         else:
+            # Calcul des vitesses max marche avant / arriere
+            self.vitesse_max_ar = 50 - (g_vitesse_max / 2)
+            self.vitesse_max_av = (g_vitesse_max / 2) + 50
 
-            if (g_vitesse >= 50): # Commande marche avant
-
-                g_vitesse_pourcent = (g_vitesse - 50) * 2
-
-                if ( g_vitesse_pourcent <= g_vitesse_max ):
-                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
-                else:
-                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse_max - 50) + '%'
-
-            else: # Commande marche arriere
-
-                g_vitesse_pourcent = (50 - g_vitesse) * 2
-
-                if ( g_vitesse_pourcent <= g_vitesse_max ):
-                    self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
-                else:
-                    self.vitesse_to_write = DEV_VITESSE + '=' + str(50 - g_vitesse_max) + '%'
+            # Marche avant bridee
+            if (g_vitesse > self.vitesse_max_av):
+                self.vitesse_to_write = DEV_VITESSE + '=' + str(self.vitesse_max_av) + '%'
+            # Marche arriere bridee
+            elif (g_vitesse < self.vitesse_max_ar):
+                self.vitesse_to_write = DEV_VITESSE + '=' + str(self.vitesse_max_ar) + '%'
+            # Fonctionnement normal
+            else:
+                self.vitesse_to_write = DEV_VITESSE + '=' + str(g_vitesse) + '%'
 
 
         # Gestion de la direction
         self.direction_to_write = DEV_DIRECTION + '=' + str(g_direction) + '%'
 
-        # print_infos(2, "Direction : " + self.direction_to_write)
-        # print_infos(2, "Vitesse : " + self.vitesse_to_write)
+        # print_infos(2, "Direction : " + self.direction_to_write + " Vitesse : " + self.vitesse_to_write)
 
         # Commande de la vitesse
         self.dev = open("/dev/servoblaster", "w")
@@ -377,14 +385,14 @@ def main():
         serveur_sock.listen(1)
 
         # Thread capteur ultrason avant
-        #thread_1 = thread_ultrason_av(1)
-        #thread_1.start()
-        #threads.append(thread_1)
+        thread_1 = thread_ultrason_av(1)
+        thread_1.start()
+        threads.append(thread_1)
 
         # Thread capteur ultrason arriere
-        #thread_2 = thread_ultrason_ar(2)
-        #thread_2.start()
-        #threads.append(thread_2)
+        thread_2 = thread_ultrason_ar(2)
+        thread_2.start()
+        threads.append(thread_2)
 
         # Thread de gestion de la partie operative
         thread_3 = thread_commande_PO(3)
