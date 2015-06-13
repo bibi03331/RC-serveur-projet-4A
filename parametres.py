@@ -22,8 +22,8 @@ DEV_DIRECTION = 'P1-12'     # Identifiant servo-moteur de direction
 DEV_VITESSE = 'P1-11'       # Identifiant variateur de vitesse
 GPIO_DIRECTION = 12         # Numero identifiant servo-moteur rirection (GPIO18)
 GPIO_VITESSE = 11           # Numero identifiant variateur de vitesse (GPIO17)
-MIN_US_SB = 1000            # Largeur d'impultion MINimale en us
-MAX_US_SB = 2000            # Largeur d'impultion MAXimale en us
+MIN_US_SB = 1100            # Largeur d'impultion MINimale en us
+MAX_US_SB = 1900            # Largeur d'impultion MAXimale en us
 
 # Adresse IP d'ecoute du serveur TCP
 BIND_IP = '192.168.1.1'

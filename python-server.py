@@ -19,14 +19,15 @@ from parametres import *
 # Variables globales
 threads = []
 serveur_sock = None
-g_distance_avant = 50
-g_distance_arriere = 50
+g_distance_avant = 0
+g_distance_arriere = 0
 g_vitesse = 50
 g_direction = 50
 g_vitesse_max = 10
-g_distance_securite = 30
-flag_update_PO = 0
+g_distance_securite = 60
 
+# Configuration en mode BCM pour les references GPIO
+GPIO.setmode(GPIO.BCM)
 
 # Gestion capteur ultrason HC-SR04 avant
 class thread_ultrason_av(threading.Thread):
@@ -40,28 +41,36 @@ class thread_ultrason_av(threading.Thread):
     def run(self):
         print_infos(1, "Demarrage des mesures capteur ultrason avant")
         while not self.kill_received:
-            if (g_vitesse > 50):
-                self.mesure_ultrason()
+            self.mesure_ultrason()
             time.sleep(DELAY_MESURE)
 
         clean_ultrason()
 
     def mesure_ultrason(self):
         global g_distance_avant
-        # Envoi d'un niveau haut de 10ms pour le trigger
+
+        # Envoi d'un niveau haut de 10us pour le trigger
         GPIO.output(GPIO_TRIGGER_CPT_AV, True)
         time.sleep(0.00001)
         GPIO.output(GPIO_TRIGGER_CPT_AV, False)
         start = time.time()
-        while GPIO.input(GPIO_ECHO_CPT_AV) == 0:
-            start = time.time()
 
-        while GPIO.input(GPIO_ECHO_CPT_AV) == 1:
+        stop = 0
+        start = 0
+
+        timeout = time.time() + 1
+        while GPIO.input(GPIO_ECHO_CPT_AV) == 0 and time.time() < timeout:
+            start = time.time()
+            time.sleep(0.0001)
+
+        timeout = time.time() + 1
+        while GPIO.input(GPIO_ECHO_CPT_AV) == 1 and time.time() < timeout:
             stop = time.time()
+            time.sleep(0.0001)
+
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
         g_distance_avant = int(round(distance))
-
 
 # Gestion capteur ultrason HC-SR04 arriere
 class thread_ultrason_ar(threading.Thread):
@@ -75,24 +84,32 @@ class thread_ultrason_ar(threading.Thread):
     def run(self):
         print_infos(1, "Demarrage des mesures capteur ultrason arriere")
         while not self.kill_received:
-            if (g_vitesse < 50):
-                self.mesure_ultrason()
+            self.mesure_ultrason()
             time.sleep(DELAY_MESURE)
 
         clean_ultrason()
 
     def mesure_ultrason(self):
         global g_distance_arriere
+
         # Envoi d'un niveau haut de 10ms pour le trigger
         GPIO.output(GPIO_TRIGGER_CPT_AR, True)
         time.sleep(0.00001)
         GPIO.output(GPIO_TRIGGER_CPT_AR, False)
         start = time.time()
-        while GPIO.input(GPIO_ECHO_CPT_AR)==0:
-            start = time.time()
 
-        while GPIO.input(GPIO_ECHO_CPT_AR)==1:
+        stop = 0
+        start = 0
+
+        timeout = time.time() + 1
+        while GPIO.input(GPIO_ECHO_CPT_AR) == 0 and time.time() < timeout:
+            start = time.time()
+            time.sleep(0.0001)
+
+        timeout = time.time() + 1
+        while GPIO.input(GPIO_ECHO_CPT_AR) == 1 and time.time() < timeout:
             stop = time.time()
+            time.sleep(0.0001)
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
         g_distance_arriere = int(round(distance))
@@ -183,9 +200,11 @@ class thread_client_tcp_info(threading.Thread):
             time.sleep(DELAY_ENVOI_INFOS)
 
     def envoi_infos_client_tcp(self):
+        global g_distance_avant
+        global g_distance_arriere
         try:
-            self.infos = "{'informations':{'distance_avant':" + str(g_distance) + "}}"
-            self.client_tcp.sendall(self.infos)
+            self.infos = "{\"informations\":{\"distance_avant\":" + str(g_distance_avant) + ",\"distance_arriere\":" + str(g_distance_arriere) + "}}\n"
+            self.client_tcp.send(self.infos)
         except:
             print_infos(3, "Erreur envoi infos client tcp")
             self.kill_received = 1
@@ -255,8 +274,7 @@ class thread_commande_PO(threading.Thread):
 # Configuration d'un capteur ultrason HC-SR04
 def configure_ultrason(GPIO_TRIGGER, GPIO_ECHO):
     print_infos(2, "Configuration ultrason")
-    # Configuration en mode BCM pour les references GPIO
-    GPIO.setmode(GPIO.BCM)
+
     # Configuration des PIN du raspberry
     GPIO.setup(GPIO_TRIGGER,GPIO.OUT)  # PIN Trigger
     GPIO.setup(GPIO_ECHO,GPIO.IN)      # PIN Echo
@@ -266,7 +284,6 @@ def configure_ultrason(GPIO_TRIGGER, GPIO_ECHO):
 # Suppression configuration GPIO des capteurs
 def clean_ultrason():
     print_infos(1, "Arret mesures capteur ultrason")
-    GPIO.cleanup()
 
 # Gestion de l'arret du programme principal et des threads
 def kill():
@@ -278,6 +295,7 @@ def kill():
     # Arret de l'ensemble des threads
     for t in threads:
         t.kill_received = True
+    GPIO.cleanup()
     # Arret du programme principal
     sys.exit(0)
 
@@ -345,6 +363,9 @@ def print_infos(level, msg):
 # Chargement de la configuration du systeme
 def load_config():
 
+    global g_vitesse_max
+    global g_distance_max
+
     try:
         print_infos(1, "Chargement des parametres")
         # Lecture du fichier de configuration
@@ -364,6 +385,18 @@ def load_config():
 # Gestion du signal kill pour terminer le programme et les threads
 def signal_kill(signal, frame):
     kill()
+
+def signal_init_done():
+    global g_direction
+    for x in range(50, 100, 5):
+        g_direction = x
+        time.sleep(0.02)
+    for x in range(100, 0, -5):
+        g_direction = x
+        time.sleep(0.02)
+    for x in range(0, 50, 5):
+        g_direction = x
+        time.sleep(0.02)
 
 def main():
     try:
@@ -398,6 +431,8 @@ def main():
         thread_3 = thread_commande_PO(3)
         thread_3.start()
         threads.append(thread_3)
+
+        signal_init_done()
 
         while(1):
             # Attente du client TCP
