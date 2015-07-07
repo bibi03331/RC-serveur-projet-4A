@@ -20,11 +20,12 @@ from parametres import *
 threads = []
 serveur_sock = None
 g_distance_avant = 0
-g_distance_arriere = 0
+g_distance_arriere = 50
 g_vitesse = 50
 g_direction = 50
 g_vitesse_max = 10
 g_distance_securite = 60
+flag_update_PO = 0
 
 # Configuration en mode BCM pour les references GPIO
 GPIO.setmode(GPIO.BCM)
@@ -70,6 +71,8 @@ class thread_ultrason_av(threading.Thread):
 
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
+        if (distance < 0):
+            distance = 0
         g_distance_avant = int(round(distance))
 
 # Gestion capteur ultrason HC-SR04 arriere
@@ -112,6 +115,8 @@ class thread_ultrason_ar(threading.Thread):
             time.sleep(0.0001)
         elapsed = stop - start
         distance = (elapsed * 34000) / 2
+        if (distance < 0):
+            distance = 0
         g_distance_arriere = int(round(distance))
 
 
@@ -173,11 +178,19 @@ class thread_client_tcp_recept(threading.Thread):
                             except KeyError:
                                 print_infos(3, "Erreur decodage JSON configuration")
 
+                        elif ('heartbit' in self.decoded): # Hearthbit
+                            try:
+                                # print_infos(2, self.decoded['heartbit'])
+                                pass
+                            except KeyError:
+                                print_infos(3, "Erreur decodage JSON commande")
+
                     except ValueError:
                         print_infos(3, "Erreur parse JSON : " + self.data)
 
         except socket.timeout:
             print_infos(3, "Timeout reception client tcp")
+            arret_voiture()
             self.kill_received = 1
 
         except:
@@ -202,11 +215,13 @@ class thread_client_tcp_info(threading.Thread):
     def envoi_infos_client_tcp(self):
         global g_distance_avant
         global g_distance_arriere
+        global g_vitesse
         try:
             self.infos = "{\"informations\":{\"distance_avant\":" + str(g_distance_avant) + ",\"distance_arriere\":" + str(g_distance_arriere) + "}}\n"
             self.client_tcp.send(self.infos)
         except:
             print_infos(3, "Erreur envoi infos client tcp")
+            arret_voiture()
             self.kill_received = 1
 
 
@@ -223,9 +238,12 @@ class thread_commande_PO(threading.Thread):
         global flag_update_PO
 
         while not self.kill_received:
-            #if (flag_update_PO == 1):
-            self.gestion_PO()
-            flag_update_PO = 0
+            if (flag_update_PO == 1):
+                self.gestion_PO()
+                time.sleep(0.0001)
+                flag_update_PO = 0
+            else:
+                time.sleep(0.0001)
         print_infos(1, "Arret commande PO")
 
     def gestion_PO(self):
@@ -298,6 +316,10 @@ def kill():
     GPIO.cleanup()
     # Arret du programme principal
     sys.exit(0)
+
+def arret_voiture():
+    global g_vitesse
+    g_vitesse = 50
 
 # Demarrage du programme de gestion du servo-moteur et du variateur de vitesse
 def launch_servoblaster():
@@ -388,6 +410,10 @@ def signal_kill(signal, frame):
 
 def signal_init_done():
     global g_direction
+    global flag_update_PO
+
+    flag_update_PO = 1
+
     for x in range(50, 100, 5):
         g_direction = x
         time.sleep(0.02)
@@ -397,6 +423,8 @@ def signal_init_done():
     for x in range(0, 50, 5):
         g_direction = x
         time.sleep(0.02)
+
+    flag_update_PO = 0
 
 def main():
     try:
@@ -437,7 +465,7 @@ def main():
         while(1):
             # Attente du client TCP
             (client_tcp, addr) = serveur_sock.accept()
-            # client_tcp.settimeout(TIMEOUT_CLIENT_TCP)
+            client_tcp.settimeout(TIMEOUT_CLIENT_TCP)
 
             # Thread pour la gestion de reception des commandes du client TCP
             thread_4 = thread_client_tcp_recept(4, client_tcp)
